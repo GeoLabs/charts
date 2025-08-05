@@ -1,0 +1,193 @@
+# Useful commands for deployment:
+#
+# 1. Retrieve the real MinIO credentials generated automatically:
+#    kubectl get secret s3-service -n zoo -o jsonpath='{.data.root-user}' | base64 --decode
+#    kubectl get secret s3-service -n zoo -o jsonpath='{.data.root-password}' | base64 --decode
+#
+# 2. Access the MinIO Console:
+#    kubectl port-forward -n zoo svc/s3-service 9001:9001
+#    Open: http://localhost:9001
+#
+# 3. Access the MinIO API:
+#    kubectl port-forward -n zoo svc/s3-service 9000:9000
+#    Endpoint: http://localhost:9000
+#
+# 4. Retrieve the Bearer token for the Argo API:
+#    export ARGO_TOKEN="Bearer $(kubectl get -n zoo secret zoo-project-dru-argo-workflows.service-account-token -o=jsonpath='{.data.token}' | base64 --decode)"
+#
+# 5. Test Argo API access:
+#    curl -H "Authorization: $ARGO_TOKEN" http://localhost:2746/api/v1/workflow-templates/zoo
+#
+# 6. Fix node-exporter if mountPropagation issue (Docker Desktop):
+#    kubectl -n zoo patch ds/zoo-project-dru-prometheus-node-exporter --type "json" -p '[{"op": "remove", "path" : "/spec/template/spec/containers/0/volumeMounts/2/mountPropagation"}]'
+
+persistence:
+  storageClass: hostpath
+  procServicesStorageClass: hostpath
+  tmpStorageClass: hostpath
+
+workflow:
+  storageClass: hostpath
+  argo:
+    enabled: true
+    storageClass: hostpath
+    defaultVolumeSize: "12Gi"
+    defaultMaxRam: "2Gi"
+    wfServer: "http://argo-server.zoo.svc.cluster.local:2746"
+    wfToken: "" # Token will be retrieved automatically during deployment
+    wfNamespace: "zoo"
+    wfSynchronizationCm: "semaphore-argo-cwl-runner-stage-in-out"
+    CwlRunnerTemplare: "argo-cwl-runner-stage-in-out"
+    CwlRunnerEndpoint: "calrissian-runner"
+    # Options for automatic token management
+    autoTokenManagement: true  # Enable automatic token retrieval
+    restartOnTokenUpdate: false  # Restart pods after token update
+  additionalInputs:
+    s3_bucket: results
+    region_name: us-east-1
+    aws_secret_access_key: minio-secret-password
+    aws_access_key_id: minio-admin
+    endpoint_url: http://s3-service.zoo.svc.cluster.local:9000    
+
+minio:
+  # minio chart value parameters description can be found here:
+  # https://github.com/bitnami/charts/tree/main/bitnami/minio
+  enabled: true
+  auth:
+    rootUser: minio-admin
+    rootPassword: minio-secret-password
+    # to access the dashboard from browser run the following port-forward command:
+    # kubectl port-forward svc/zoo-project-dru-minio 9001:9001 -n zp
+  persistence:
+    enabled: true
+    storageClass: hostpath
+    size: 2Gi
+    accessMode: ReadWriteOnce
+  defaultBuckets: "eoepca results"
+  fullnameOverride: "s3-service"
+
+cookiecutter:
+  templateUrl: https://github.com/gfenoy/zoo-argo-wf-proc-service-template.git
+  templateBranch: feature/additional-parameters-log-urls
+  #templateUrl: https://github.com/EOEPCA/eoepca-proc-service-template.git
+  #templateBranch: feature/python3.8
+
+iam:
+  enabled: false
+  openeoAuth:
+    enabled: false
+
+webui:
+  enabled: false
+
+websocketd:
+  enabled: true
+
+redis:
+  enabled: true
+
+postgresql:
+  enabled: true
+  auth:
+    database: zoo
+    username: zoo
+    password: zoo-password
+  external:
+    enabled: false
+
+argo-workflows:
+  enabled: true
+  minio:
+    enabled: false  # Use external MinIO
+    # Configuration for templates using .Values.minio.*
+    auth:
+      rootUser: minio-admin
+      rootPassword: minio-secret-password
+    defaultBuckets: eoepca
+    # Configuration to use the external S3 service
+    external:
+      enabled: true
+      # Option 1: Use a full endpoint (priority if provided)
+      endpoint: ""
+      # Option 2: Build the URL with serviceName and port (default)
+      serviceName: "s3-service"
+      port: 9000
+      secure: false
+      accessKeySecret:
+        name: "s3-service"
+        key: "root-user"
+      secretKeySecret:
+        name: "s3-service"
+        key: "root-password"
+  workflow:
+    serviceAccount:
+      create: true
+  server:
+    enabled: true
+    serviceType: ClusterIP
+  controller:
+    enabled: true
+    workflowDefaults:
+      spec:
+        serviceAccountName: argo-workflow
+    # Use the same instanceID as the parent
+    instanceID: zoo
+  executor:
+    enabled: true
+
+monitoring:
+  enabled: true
+  kube-prometheus-stack:
+    # Configuration corrigée pour node-exporter compatible Docker Desktop
+    prometheus-node-exporter:
+      enabled: true
+      # CORRECTION: Désactiver mountPropagation pour Docker Desktop
+      hostRootFsMount:
+        enabled: true
+        mountPropagation: ""  # Vide = None, compatible Docker Desktop
+      hostProcFsMount:
+        mountPropagation: ""  # Vide = None
+      hostSysFsMount:
+        mountPropagation: ""  # Vide = None
+      # Désactiver les fonctionnalités qui nécessitent des privilèges élevés
+      hostNetwork: false
+      hostPID: false
+      # Configuration des arguments
+      extraArgs:
+        - --web.listen-address=0.0.0.0:9100
+        - --path.procfs=/host/proc
+        - --path.sysfs=/host/sys
+        - --path.rootfs=/host/root
+        # Exclure les collecteurs problématiques sur Docker Desktop
+        - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+        - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|erofs)$
+    
+    # Prometheus configuration
+    prometheus:
+      enabled: true
+      prometheusSpec:
+        serviceMonitorSelectorNilUsesHelmValues: false
+        serviceMonitorSelector: {}
+        ruleSelector: {}
+    
+    # Keep other components active
+    grafana:
+      enabled: true
+      defaultDashboardsEnabled: true
+      adminPassword: admin
+    
+    # Kube-state-metrics for Kubernetes metrics
+    kube-state-metrics:
+      enabled: true
+    
+    # Alertmanager
+    alertmanager:
+      enabled: true
+    
+    # Disable PodSecurityPolicy
+    podSecurityPolicy:
+      enabled: false
+    prometheusOperator:
+      enabled: true
+      podSecurityPolicy:
+        enabled: false
