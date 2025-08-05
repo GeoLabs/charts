@@ -84,6 +84,8 @@ spec:
             {{- end }}
 
             {{- if .Values.workflow.dedicatedNamespace.enabled }}
+            - name: KEEP_SESSION
+              value: "true"
             {{- if .Values.workflow.dedicatedNamespace.name }}
             - name: USE_NAMESPACE
               value: {{ .Values.workflow.dedicatedNamespace.name | quote }}
@@ -103,10 +105,15 @@ spec:
               value: {{ .Values.workflow.argo.defaultMaxCores | toString }}
             - name: ARGO_WF_DEFAULT_MAX_RAM
               value: {{ .Values.workflow.argo.defaultMaxRam }}
+            - name: ARGO_WF_NAMESPACE
+              value: {{ .Values.workflow.argo.wfNamespace }}
             - name: ARGO_WF_ENDPOINT
               value: {{ .Values.workflow.argo.wfServer }}
             - name: ARGO_WF_TOKEN
-              value: {{ .Values.workflow.argo.wfToken }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "zoo-project-dru.fullname" . }}-argo-workflows.service-account-token
+                  key: token
             - name: ARGO_WF_SYNCHRONIZATION_CM
               value: {{ .Values.workflow.argo.wfSynchronizationCm }}
             - name: ARGO_CWL_RUNNER_TEMPLATE

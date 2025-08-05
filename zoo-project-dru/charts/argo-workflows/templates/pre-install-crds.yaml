@@ -1,0 +1,98 @@
+{{- if .Values.argo.workflows.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-crd-install
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    app.kubernetes.io/component: crd-installer
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "argo-workflows.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: crd-installer
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "argo-workflows.serviceAccountName" . }}-crd-installer
+      containers:
+      - name: crd-installer
+        image: bitnami/kubectl:1.28
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Installing Argo Workflows CRDs..."
+          kubectl apply -f /crds/argo-workflows-crds.yaml
+          echo "Argo Workflows CRDs installed successfully"
+          {{- if .Values.argo.events.enabled }}
+          if [ -f /crds/argo-events-crds.yaml ]; then
+            echo "Installing Argo Events CRDs..."
+            kubectl apply -f /crds/argo-events-crds.yaml
+            echo "Argo Events CRDs installed successfully"
+          fi
+          {{- end }}
+          echo "All CRDs installed successfully"
+        volumeMounts:
+        - name: crds
+          mountPath: /crds
+          readOnly: true
+      volumes:
+      - name: crds
+        configMap:
+          name: {{ include "argo-workflows.fullname" . }}-crds
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "argo-workflows.serviceAccountName" . }}-crd-installer
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    app.kubernetes.io/component: crd-installer
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-crd-installer
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    app.kubernetes.io/component: crd-installer
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["get", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-crd-installer
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    app.kubernetes.io/component: crd-installer
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "argo-workflows.fullname" . }}-crd-installer
+subjects:
+- kind: ServiceAccount
+  name: {{ include "argo-workflows.serviceAccountName" . }}-crd-installer
+  namespace: {{ .Values.global.namespace }}
+{{- end }}

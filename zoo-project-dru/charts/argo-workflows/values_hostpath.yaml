@@ -1,0 +1,183 @@
+# Values file for argo-workflows with hostpath storage classes
+# This configuration is suitable for local development environments like minikube, kind, or Docker Desktop
+
+# Override storage classes to use hostpath
+persistence:
+  enabled: true
+  storageClass: "hostpath"
+  accessMode: ReadWriteOnce  # hostpath typically supports only RWO
+  size: 5Gi
+
+# MinIO configuration with hostpath storage
+minio:
+  enabled: true
+  replicas: 1  # hostpath doesn't support multi-replica
+  # Force standalone mode for single replica
+  mode: standalone
+  # MinIO chart specific configurations
+  distributedMode:
+    enabled: false
+  standalone:
+    enabled: true
+  persistence:
+    enabled: true
+    storageClass: "hostpath"
+    size: 5Gi
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 250m
+  defaultBuckets: "argo-artifacts"
+  # MinIO credentials - configuration pour le chart MinIO officiel
+  rootUser: "minio-admin"
+  rootPassword: "minio-admin"
+  # Configuration legacy (peut être supprimée)
+  auth:
+    rootUser: "minio-admin"
+    rootPassword: "minio-admin"
+  service:
+    type: ClusterIP
+    ports:
+      api: 9000
+      console: 9001
+
+# Argo Workflows configuration optimized for local development
+argo:
+  workflows:
+    enabled: true
+    version: "3.5.5"
+    # CRD installation
+    crds:
+      install: true
+    server:
+      secure: false
+      authMode: "server"
+      namespaced: true
+      env:
+        FIRST_TIME_USER_MODAL: "false"
+        FEEDBACK_MODAL: "false"
+        NEW_VERSION_MODAL: "false"
+      service:
+        type: ClusterIP
+        port: 2746
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    
+    controller:
+      namespaced: true
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+      parallelism: 10
+      executor:
+        name: "docker"  # For local development, docker is usually available
+      retentionPolicy:
+        completed: 86400   # 1 day for local development
+        failed: 86400      # 1 day for local development
+        errored: 86400     # 1 day for local development
+      
+  events:
+    version: "1.9.1"
+    enabled: true
+    replicas: 1  # Single replica for local development
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+    eventBus:
+      enabled: true
+      name: "default"
+      type: "jetstream"
+      jetstream:
+        version: "latest"
+        replicas: 1  # Single replica for local development
+        settings: |
+          max_memory_store: 256MB
+          max_file_store: 1GB
+        streamConfig: |
+          maxMsgs: 10000
+          maxAge: 24h
+          maxBytes: -1
+          replicas: 1
+          duplicates: 60s
+
+# CWL Runner configuration for local development
+cwlRunner:
+  enabled: true
+  image:
+    repository: "terradue/calrissian"
+    tag: "0.99"
+    pullPolicy: IfNotPresent
+  defaultResources:
+    maxRam: "2G"  # Reduced for local development
+    maxCores: "2"
+  stageOut:
+    enabled: true
+    image:
+      repository: "eoepca/stage-out"
+      tag: "latest"
+      pullPolicy: IfNotPresent
+
+# Global configuration
+global:
+  namespace: "argo-workflows"
+
+# RBAC configuration
+rbac:
+  create: true
+  
+# Service Account configuration  
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Security contexts for local development
+podSecurityContext: {}
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# No specific node requirements for local development
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Ingress disabled for local development (use port forwarding)
+ingress:
+  enabled: false
+
+# Enable monitoring for local development
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      path: /metrics
+    prometheusRule:
+      enabled: true
+  grafana:
+    enabled: true

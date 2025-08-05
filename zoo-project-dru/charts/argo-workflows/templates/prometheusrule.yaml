@@ -1,0 +1,19 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.prometheus.enabled .Values.monitoring.prometheus.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.prometheus.prometheusRule.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+  - name: argo-workflows.rules
+    rules:
+    {{- with .Values.monitoring.prometheus.prometheusRule.rules }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

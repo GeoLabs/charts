@@ -1,0 +1,27 @@
+apiVersion: v2
+name: argo-workflows
+description: A Helm chart for deploying Argo Workflows and Argo Events for EOEPCA processing platform with CWL support - fixed deprecated containerRuntimeExecutor
+type: application
+version: 0.2.1
+appVersion: "3.5.5"
+keywords:
+  - argo
+  - workflows
+  - processing
+  - eoepca
+  - cwl
+  - calrissian
+  - stac
+home: https://github.com/ZOO-Project/charts
+sources:
+  - https://github.com/argoproj/argo-workflows
+  - https://github.com/argoproj/argo-events
+  - https://github.com/gfenoy/dev-platform-argo-workflows
+maintainers:
+  - name: Gerald Fenoy
+    email: gerald.fenoy@geolabs.fr
+dependencies:
+  - name: minio
+    version: 5.2.0
+    repository: https://charts.min.io/
+    condition: minio.enabled

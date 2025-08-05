@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-controller-configmap
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.controller.labels" . | nindent 4 }}
+data:
+  config: |
+    # Configuration for Argo Workflows Controller
+    
+    # Namespace mode configuration
+    instanceID: {{ include "argo-workflows.namespace" . }}
+    
+    # Parallelism settings
+    parallelism: {{ .Values.argo.workflows.controller.parallelism }}
+    
+    # Default artifact repository
+    # Configuration for MinIO S3 storage
+    {{- if or .Values.minio.enabled .Values.minio.external.enabled }}
+    artifactRepository:
+{{ include "argo-workflows.artifactRepository" . | indent 6 }}
+    {{- end }}
+    
+    # Container runtime executor configuration
+    executor:
+      name: {{ .Values.argo.workflows.controller.executor.name }}
+      imagePullPolicy: IfNotPresent
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    # Workflow defaults
+    workflowDefaults:
+      spec:
+        # Default service account for workflows
+        serviceAccountName: {{ include "argo-workflows.serviceAccountName" . }}
+        # Pod GC strategy must be one of the following:
+        # * OnPodCompletion - delete pods immediately when pod is completed (including errors/failures)
+        # * OnPodSuccess - delete pods immediately when pod is successful
+        # * OnWorkflowCompletion - delete pods when workflow is completed
+        # * OnWorkflowSuccess - delete pods when workflow is successful
+        # Default: do not delete pods
+        podGC:
+          strategy: OnWorkflowCompletion
+          # The duration before pods in the GC queue get deleted. Defaults to 5s
+          # Requires Argo >= 3.5
+          deleteDelayDuration: 120s
+        # Default pod metadata
+        podMetadata:
+          labels:
+            workflows.argoproj.io/archive-strategy: "false"
+        # Default security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+    
+    # Links for UI
+    links:
+    - name: "Workflow Link"
+      scope: "workflow"
+      url: "http://localhost:2746/workflows/{{ "{{" }}.metadata.namespace{{ "}}" }}/{{ "{{" }}.metadata.name{{ "}}" }}"
+    
+    # Data retention policy (values in seconds)
+    retentionPolicy:
+      completed: {{ .Values.argo.workflows.controller.retentionPolicy.completed }}
+      failed: {{ .Values.argo.workflows.controller.retentionPolicy.failed }}
+      errored: {{ .Values.argo.workflows.controller.retentionPolicy.errored }}
+    
+    # Metrics configuration
+    metricsConfig:
+      enabled: true
+      path: /metrics
+      port: 9090
+    
+    # Telemetry configuration
+    telemetryConfig:
+      enabled: false

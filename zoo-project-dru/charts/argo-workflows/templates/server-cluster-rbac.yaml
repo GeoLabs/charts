@@ -1,0 +1,51 @@
+{{- if .Values.argo.workflows.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-server-cluster-role
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+rules:
+- apiGroups:
+  - argoproj.io
+  resources:
+  - workflowtemplates
+  - clusterworkflowtemplates
+  - eventsources
+  - sensors
+  - workfloweventbindings
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - argoproj.io
+  resources:
+  - workflows
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-server-cluster-role-binding
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "argo-workflows.fullname" . }}-server-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "argo-workflows.serviceAccountName" . }}-server
+  namespace: {{ .Values.global.namespace }}
+{{- end }}

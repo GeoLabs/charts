@@ -1,0 +1,31 @@
+{{- if and .Values.rbac.create .Values.argo.workflows.controller.namespaced }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-cluster-workflow-templates
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workflow-controller
+rules:
+# Minimal read-only permissions for ClusterWorkflowTemplates
+- apiGroups: ["argoproj.io"]
+  resources: ["clusterworkflowtemplates"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-cluster-workflow-templates
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workflow-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "argo-workflows.fullname" . }}-cluster-workflow-templates
+subjects:
+- kind: ServiceAccount
+  name: {{ include "argo-workflows.serviceAccountName" . }}
+  namespace: {{ include "argo-workflows.namespace" . }}
+{{- end }}

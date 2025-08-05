@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argo-server
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.server.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: argo-server
+      {{- include "argo-workflows.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: argo-server
+        {{- include "argo-workflows.server.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "argo-workflows.serviceAccountName" . }}-server
+      containers:
+      - name: argo-server
+        image: "quay.io/argoproj/argocli:v{{ .Values.argo.workflows.version }}"
+        imagePullPolicy: IfNotPresent
+        command:
+        - argo
+        args:
+        - server
+        - --namespaced={{ .Values.argo.workflows.server.namespaced }}
+        {{- if .Values.argo.workflows.server.namespaced }}
+        - --managed-namespace={{ include "argo-workflows.namespace" . }}
+        {{- end }}
+        - --auth-mode={{ .Values.argo.workflows.server.authMode }}
+        {{- if not .Values.argo.workflows.server.secure }}
+        - --secure=false
+        {{- end }}
+        - --loglevel=info
+        - --gloglevel=6
+        env:
+        {{- range $key, $value := .Values.argo.workflows.server.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        - name: ARGO_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        {{- with .Values.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        ports:
+        - name: web
+          containerPort: 2746
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 2746
+            {{- if .Values.argo.workflows.server.secure }}
+            scheme: HTTPS
+            {{- else }}
+            scheme: HTTP
+            {{- end }}
+          initialDelaySeconds: 10
+          periodSeconds: 20
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 2746
+            {{- if .Values.argo.workflows.server.secure }}
+            scheme: HTTPS
+            {{- else }}
+            scheme: HTTP
+            {{- end }}
+          initialDelaySeconds: 10
+          periodSeconds: 20
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.argo.workflows.server.resources | nindent 10 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

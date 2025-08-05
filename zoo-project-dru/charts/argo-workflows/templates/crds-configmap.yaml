@@ -1,0 +1,21 @@
+{{- if .Values.argo.workflows.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-crds
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    app.kubernetes.io/component: crds
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-15"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+data:
+  argo-workflows-crds.yaml: |
+{{ .Files.Get "crds/argo-workflows-crds.yaml" | indent 4 }}
+{{- if .Values.argo.events.enabled }}
+  argo-events-crds.yaml: |
+{{ .Files.Get "crds/argo-events-crds.yaml" | indent 4 }}
+{{- end }}
+{{- end }}

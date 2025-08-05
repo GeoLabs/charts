@@ -1,3 +1,23 @@
+# Commandes utiles pour le déploiement :
+# 
+# 1. Récupérer les vrais credentials MinIO générés automatiquement :
+#    kubectl get secret s3-service -n zoo -o jsonpath='{.data.root-user}' | base64 --decode
+#    kubectl get secret s3-service -n zoo -o jsonpath='{.data.root-password}' | base64 --decode
+#
+# 2. Accéder au MinIO Console :
+#    kubectl port-forward -n zoo svc/s3-service 9001:9001
+#    Open: http://localhost:9001
+#
+# 3. Accéder à l'API MinIO :
+#    kubectl port-forward -n zoo svc/s3-service 9000:9000
+#    Endpoint: http://localhost:9000
+#
+# 4. Récupérer le token Bearer pour l'API Argo :
+#    export ARGO_TOKEN="Bearer $(kubectl get -n zoo secret zoo-project-dru-argo-workflows.service-account-token -o=jsonpath='{.data.token}' | base64 --decode)"
+#
+# 5. Tester l'accès API Argo :
+#    curl -H "Authorization: $ARGO_TOKEN" http://localhost:2746/api/v1/workflow-templates/zoo
+
 useKubeProxy: true
 
 persistence:
@@ -7,6 +27,25 @@ persistence:
 
 workflow:
   storageClass: hostpath
+  argo:
+    enabled: false
+    storageClass: hostpath
+    defaultVolumeSize: "12Gi"
+    defaultMaxRam: "2Gi"
+    wfServer: "http://argo-server.zoo.svc.cluster.local:2746"
+    wfToken: "" # Token sera récupéré automatiquement lors du déploiement
+    wfSynchronizationCm: "semaphore-argo-cwl-runner-stage-in-out"
+    CwlRunnerTemplare: "argo-cwl-runner-stage-in-out"
+    CwlRunnerEndpoint: "calrissian-runner"
+    # Options pour la gestion automatique des tokens
+    autoTokenManagement: true  # Active la récupération automatique du token
+    restartOnTokenUpdate: false  # Redémarre les pods après mise à jour du token
+  additionalInputs:
+    s3_bucket: results
+    region_name: us-east-1
+    aws_secret_access_key: minio-secret-password
+    aws_access_key_id: minio-admin
+    endpoint_url: http://s3-service.zoo.svc.cluster.local:9000    
 
 minio:
   # minio chart value parameters description can be found here:
@@ -26,8 +65,10 @@ minio:
   fullnameOverride: "s3-service"
 
 cookiecutter:
-  templateUrl: https://github.com/EOEPCA/eoepca-proc-service-template.git
-  templateBranch: feature/python3.8
+  templateUrl: https://github.com/gfenoy/zoo-argo-wf-proc-service-template.git
+  templateBranch: feature/additional-parameters-log-urls
+  #templateUrl: https://github.com/EOEPCA/eoepca-proc-service-template.git
+  #templateBranch: feature/python3.8
 
 iam:
   enabled: false
@@ -35,10 +76,26 @@ iam:
     enabled: false
 
 webui:
-  enabled: false
+  oidc:
+    issuer: https://auth.geolabs.fr/realms/zooproject
+    clientId: zoo-client-id
+    clientSecret: zoo-client-secret
+    remoteUserClaim: email
+    providerTokenEndpointAuth: client_secret_basic
+    authVerifyJwksUri: https://auth.geolabs.fr/realms/zooproject/protocol/openid-connect/certs
+    scope: "openid email"
 
 websocketd:
   enabled: true
 
 redis:
   enabled: true
+
+postgresql:
+  enabled: true
+  auth:
+    database: zoo
+    username: zoo
+    password: zoo-password
+  external:
+    enabled: false

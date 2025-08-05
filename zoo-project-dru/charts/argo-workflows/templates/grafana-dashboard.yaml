@@ -1,0 +1,130 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.grafana.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-dashboard
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.grafana.dashboard.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+data:
+  argo-workflows-dashboard.json: |-
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Argo Workflows",
+        "tags": ["argo", "workflows", "kubernetes"],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "30s",
+        "schemaVersion": 30,
+        "version": 1,
+        "panels": [
+          {
+            "id": 1,
+            "title": "Active Workflows",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "argo_workflows_running_total",
+                "legendFormat": "Running Workflows"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Workflow Success Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "(rate(argo_workflows_succeeded_total[5m]) / (rate(argo_workflows_succeeded_total[5m]) + rate(argo_workflows_failed_total[5m]))) * 100",
+                "legendFormat": "Success Rate %"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100
+              }
+            }
+          },
+          {
+            "id": 3,
+            "title": "Workflow Creation Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(argo_workflows_created_total[5m])",
+                "legendFormat": "Workflows Created/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 4,
+            "title": "Workflow Duration",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(argo_workflows_duration_seconds_bucket[5m]))",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.50, rate(argo_workflows_duration_seconds_bucket[5m]))",
+                "legendFormat": "50th percentile"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              }
+            }
+          },
+          {
+            "id": 5,
+            "title": "Workflow Status Distribution",
+            "type": "piechart",
+            "targets": [
+              {
+                "expr": "argo_workflows_succeeded_total",
+                "legendFormat": "Succeeded"
+              },
+              {
+                "expr": "argo_workflows_failed_total",
+                "legendFormat": "Failed"
+              },
+              {
+                "expr": "argo_workflows_running_total",
+                "legendFormat": "Running"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Controller Resource Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(process_cpu_seconds_total{job=\"argo-workflows-controller-metrics\"}[5m]) * 100",
+                "legendFormat": "CPU Usage %"
+              },
+              {
+                "expr": "process_resident_memory_bytes{job=\"argo-workflows-controller-metrics\"} / 1024 / 1024",
+                "legendFormat": "Memory Usage MB"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          }
+        ]
+      },
+      "folderId": null,
+      "overwrite": true
+    }
+{{- end }}

@@ -22,7 +22,7 @@ To install the chart with the release name `my-zoo-project-dru`:
 
 ````bash
 helm repo add zoo-project https://zoo-project.github.io/charts/
-helm install my-zoo-project-dru zoo-project/zoo-project-dru --version 0.5.0
+helm install my-zoo-project-dru zoo-project/zoo-project-dru --version 0.6.0
 ````
 
 ## Parameters
@@ -386,15 +386,96 @@ See [reference documentation](https://github.com/EOEPCA/zoo-argowf-runner) for m
 
 | Name                                                     | Description                        | Value                                                                 |
 |:---------------------------------------------------------|:-----------------------------------|:----------------------------------------------------------------------|
-| workflow.argo.enabled                                    | Activate Argo support by setting this to `true` | true |
+| workflow.argo.enabled                                    | Activate Argo support by setting this to `true` | false |
 | workflow.argo.storageClass                               | The storage class to use for temporary data | standard |
 | workflow.argo.defaultVolumeSize                          | The default volume size | "12Gi" |
 | workflow.argo.defaultMaxRam                              | The default maximum allocated ram | "2Gi" |
-| workflow.argo.wfServer                                   | The Argo server URL  | "http://argo-server.ns1.svc.cluster.local:2746" |
-| workflow.argo.wfToken                                    | The Argo server token | "aaaabbbbccccdddd" |
-| workflow.argo.wfSynchronizationCm                        | The configmap name | "semaphore-argo-cwl-runner-stage-in-out" |
-| workflow.argo.CwlRunnerTemplare                          | The workflow name (available from the Argo workflow templates) to use as CWL Runner Template  | "argo-cwl-runner-stage-in-out" |
+| workflow.argo.defaultMaxCores                            | The default maximum cores allocated | "2" |
+| workflow.argo.wfServer                                   | The Argo server URL  | "http://argo-server.zoo.svc.cluster.local:2746" |
+| workflow.argo.wfToken                                    | The Argo server token (auto-retrieved if autoTokenManagement enabled) | "" |
+| workflow.argo.wfNamespace                                | The namespace where Argo workflows will be executed | "zoo" |
+| workflow.argo.wfSynchronizationCm                        | The configmap name for workflow synchronization | "semaphore-argo-cwl-runner-stage-in-out" |
+| workflow.argo.CwlRunnerTemplare                          | The workflow template name to use as CWL Runner | "argo-cwl-runner-stage-in-out" |
 | workflow.argo.CwlRunnerEndpoint                          | The entry point to use from the CWL Runner Template | "calrissian-runner" |
+| workflow.argo.autoTokenManagement                        | Enable automatic token retrieval from ServiceAccount | true |
+| workflow.argo.restartOnTokenUpdate                       | Restart ZOO-Kernel pods when token is updated | false |
+
+**Token Management**: When `autoTokenManagement` is enabled, the Argo Workflows token is automatically retrieved from the ServiceAccount and made available to ZOO-Kernel. This eliminates the need to manually configure `wfToken`.
+
+## Argo Workflows Subchart
+
+The chart includes an optional Argo Workflows subchart that can be enabled to deploy a complete Argo Workflows instance alongside ZOO-Project.
+
+| Name                                                     | Description                        | Value                                                                 |
+|:---------------------------------------------------------|:-----------------------------------|:----------------------------------------------------------------------|
+| argo-workflows.enabled                                   | Enable the Argo Workflows subchart | false |
+| argo-workflows.server.enabled                            | Enable the Argo server (UI) | true |
+| argo-workflows.controller.enabled                        | Enable the Argo workflow controller | true |
+| argo-workflows.controller.instanceID                     | Instance ID for workflow isolation | "zoo" |
+| argo-workflows.minio.enabled                             | Enable MinIO for artifact storage | false |
+| argo-workflows.minio.external.enabled                    | Use external MinIO service | true |
+| argo-workflows.minio.external.serviceName                | External MinIO service name | "s3-service" |
+| argo-workflows.minio.external.port                       | External MinIO service port | 9000 |
+| argo-workflows.minio.external.secure                     | Use HTTPS for MinIO connection | false |
+
+**Usage Example**:
+```yaml
+workflow:
+  argo:
+    enabled: true
+    autoTokenManagement: true
+
+argo-workflows:
+  enabled: true
+  server:
+    enabled: true
+  controller:
+    instanceID: "zoo"
+```
+
+## Monitoring
+
+The chart includes optional monitoring capabilities using the Prometheus stack (Prometheus, Grafana, Alertmanager, and node-exporter).
+
+| Name                                                     | Description                        | Value                                                                 |
+|:---------------------------------------------------------|:-----------------------------------|:----------------------------------------------------------------------|
+| monitoring.enabled                                       | Enable monitoring stack (Prometheus, Grafana, etc.) | false |
+| monitoring.kube-prometheus-stack.prometheus.enabled      | Enable Prometheus server | true |
+| monitoring.kube-prometheus-stack.grafana.enabled         | Enable Grafana dashboard | true |
+| monitoring.kube-prometheus-stack.grafana.adminPassword   | Grafana admin password | "admin" |
+| monitoring.kube-prometheus-stack.alertmanager.enabled    | Enable Alertmanager for notifications | true |
+| monitoring.kube-prometheus-stack.prometheus-node-exporter.enabled | Enable node-exporter for system metrics | true |
+| monitoring.kube-prometheus-stack.kube-state-metrics.enabled | Enable kube-state-metrics for Kubernetes metrics | true |
+
+### Prometheus Node Exporter Configuration
+
+The node-exporter component is configured for compatibility with Docker Desktop and other development environments:
+
+| Name                                                     | Description                        | Value                                                                 |
+|:---------------------------------------------------------|:-----------------------------------|:----------------------------------------------------------------------|
+| monitoring.kube-prometheus-stack.prometheus-node-exporter.hostRootFsMount.mountPropagation | Root filesystem mount propagation | "" (None - Docker Desktop compatible) |
+| monitoring.kube-prometheus-stack.prometheus-node-exporter.hostProcFsMount.mountPropagation | Proc filesystem mount propagation | "" (None - Docker Desktop compatible) |
+| monitoring.kube-prometheus-stack.prometheus-node-exporter.hostSysFsMount.mountPropagation | Sys filesystem mount propagation | "" (None - Docker Desktop compatible) |
+| monitoring.kube-prometheus-stack.prometheus-node-exporter.hostNetwork | Use host network | false |
+| monitoring.kube-prometheus-stack.prometheus-node-exporter.hostPID | Use host PID namespace | false |
+
+**Docker Desktop Compatibility**: The chart automatically patches node-exporter for Docker Desktop compatibility by removing unsupported `mountPropagation` settings via a post-install hook.
+
+**Usage Example**:
+```yaml
+monitoring:
+  enabled: true
+  kube-prometheus-stack:
+    grafana:
+      adminPassword: "my-secure-password"
+    prometheus-node-exporter:
+      enabled: true
+```
+
+**Access Monitoring Services**:
+- **Prometheus**: `kubectl port-forward svc/zoo-project-dru-prometheus 9090:9090 -n zoo`
+- **Grafana**: `kubectl port-forward svc/zoo-project-dru-grafana 3000:80 -n zoo`
+- **Alertmanager**: `kubectl port-forward svc/zoo-project-dru-alertmanager 9093:9093 -n zoo`
 
 
 ### ingress

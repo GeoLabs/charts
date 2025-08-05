@@ -1,0 +1,391 @@
+# Default values for argo-workflows.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global configuration
+global:
+  # Namespace where Argo Workflows will be deployed
+  namespace: "argo-workflows"
+
+# Controller configuration
+controller:
+  instanceID: "argo"
+  
+# Argo Workflows configuration
+argo:
+  workflows:
+    # Enable Argo Workflows deployment
+    enabled: true
+    # Version of Argo Workflows to deploy
+    version: "3.5.5"
+    # CRD installation
+    crds:
+      install: true
+    # Server configuration
+    server:
+      # Enable insecure mode (HTTP instead of HTTPS)
+      secure: false
+      # Authentication mode (server, client, sso)
+      authMode: "server"
+      # Enable namespaced mode
+      namespaced: true
+      # Disable first time user modals
+      env:
+        FIRST_TIME_USER_MODAL: "false"
+        FEEDBACK_MODAL: "false"
+        NEW_VERSION_MODAL: "false"
+      # Service configuration
+      service:
+        type: ClusterIP
+        port: 2746
+      # Resources
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    
+    # Workflow Controller configuration  
+    controller:
+      # Enable namespaced mode
+      namespaced: true
+      # Instance ID for the controller (defaults to release name)
+      instanceID: ""
+      # Resources
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+      # Parallelism limits
+      parallelism: 10
+      # Container runtime executor configuration
+      executor:
+        name: "docker"  # Options: docker, pns, k8sapi, kubelet, emissary
+      # Data retention policy (values in seconds)
+      retentionPolicy:
+        completed: 259200  # 3 days (3 * 24 * 60 * 60)
+        failed: 259200     # 3 days 
+        errored: 259200    # 3 days
+        # Common values: 86400 (1 day), 259200 (3 days), 604800 (1 week), 1209600 (2 weeks)
+      
+  # Argo Events configuration
+  events:
+    # Version of Argo Events to deploy
+    version: "1.9.1"
+    # Enable Argo Events
+    enabled: true
+    # Image pull policy
+    imagePullPolicy: Always
+    # Number of controller replicas
+    replicas: 1
+    # Controller resources
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    # Event bus configuration
+    eventBus:
+      # Enable event bus deployment
+      enabled: true
+      # Event bus name
+      name: "default"
+      # Event bus type (jetstream or nats)
+      type: "jetstream"
+      # JetStream configuration
+      jetstream:
+        # JetStream version
+        version: "latest"
+        # Number of replicas
+        replicas: 1  # Reduced for local development
+        # JetStream settings
+        settings: |
+          max_memory_store: -1
+          max_file_store: 1TB
+        # Stream configuration
+        streamConfig: |
+          maxMsgs: 50000
+          maxAge: 168h
+          maxBytes: -1
+          replicas: 1
+          duplicates: 300s
+      # NATS configuration (alternative to JetStream)
+      nats:
+        # Number of replicas
+        replicas: 1
+        # Authentication type
+        auth: "token"
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: argo-workflows.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# MinIO configuration for artifact storage
+minio:
+  enabled: true
+  replicas: 1
+  # Force standalone mode for single replica
+  mode: standalone
+  # MinIO chart specific configurations
+  distributedMode:
+    enabled: false
+  standalone:
+    enabled: true
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 250m
+  defaultBuckets: "argo-artifacts"
+  # MinIO credentials
+  auth:
+    rootUser: "minio-admin"
+    rootPassword: "minio-admin"
+  # External MinIO configuration
+  external:
+    # When enabled, use external MinIO instead of embedded one
+    enabled: false
+    # Complete endpoint URL (if provided, takes precedence over serviceName construction)
+    # Example: "http://my-external-minio.example.com:9000"
+    endpoint: ""
+    # Service name for constructing URL (used if endpoint is empty)
+    serviceName: "s3-service"
+    # Service port for constructing URL  
+    port: 9000
+    # Secret containing access credentials
+    accessKeySecret:
+      name: "s3-service"
+      key: "root-user"
+    secretKeySecret:
+      name: "s3-service" 
+      key: "root-password"
+    # Use HTTPS
+    secure: false
+  # MinIO default bucket creation
+  buckets:
+    - name: "argo-artifacts"
+      policy: "none"
+      purge: false
+    - name: "results"
+      policy: "none"
+      purge: false
+  service:
+    type: ClusterIP
+    ports:
+      api: 9000
+      console: 9001
+  # Override command for standalone mode
+  extraEnvVars:
+    - name: MINIO_DISTRIBUTED_MODE_ENABLED
+      value: "no"
+
+# RBAC configuration
+rbac:
+  create: true
+  
+# Service Account configuration  
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security Context
+podSecurityContext: {}
+
+# Security Context
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Persistent Volume Claims for workflow data
+persistence:
+  # Enable persistent storage for workflow data
+  enabled: true
+  # Storage class
+  storageClass: ""
+  # Access mode
+  accessMode: ReadWriteMany
+  # Size
+  size: 5Gi
+
+# CWL Runner specific configuration
+cwlRunner:
+  # Enable CWL runner workflow templates
+  enabled: true
+  # Image configuration for CWL runner containers
+  image:
+    repository: "terradue/calrissian"
+    tag: "0.99"
+    pullPolicy: IfNotPresent
+  # Resources for CWL jobs
+  defaultResources:
+    maxRam: "4G"
+    maxCores: "4"
+  # Container resources
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "2Gi"
+      cpu: "2"
+
+
+# Stage-in/stage-out configuration
+stageInOut:
+  # Enable stage-in/stage-out workflow template
+  enabled: true
+  # Image for stage-in/stage-out containers
+  image: "alpine/curl"
+  tag: "latest"
+  # Resources for stage-in/out jobs
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  # Semaphore configuration for workflow throttling
+  semaphore:
+    workflow: "3"
+  # User settings for S3 access (will be templated from files/user-settings.json if not provided)
+  userSettings: ""
+
+# CWL Wrapper configuration
+wrapper:
+  # Rules configuration (will be templated from files/rules.yaml if not provided)
+  rules: ""
+  # Main CWL configuration (will be templated from files/main.yaml if not provided)
+  main: ""
+  # Stage-in CWL configuration (will be templated from files/stage-in.yaml if not provided)
+  stageIn: ""
+  # Stage-out CWL configuration (will be templated from files/stage-out.yaml if not provided)
+  stageOut: ""
+
+# Feature collection script (will be templated from files/feature_collection.py if not provided)
+featureCollectionScript: ""
+
+# CWL Wrapper image
+cwlwrapperImage: "eoepca/cwl-wrapper@sha256:02f4a84d7cfdb7035cd6d58c1d9fca3f9c5e24bf2a1ea577312297f2c42574bd"
+
+# Stage-out image
+stageOutImage: "ghcr.io/eoap/mastering-app-package/stage:1.1.0"
+
+# Synchronization configuration
+synchronization:
+  enabled: true
+  semaphoreName: "semaphore-argo-cwl-runner"
+
+# Monitoring and observability configuration
+monitoring:
+  # Enable monitoring components
+  enabled: true
+  
+  # Prometheus configuration
+  prometheus:
+    # Enable Prometheus ServiceMonitor for scraping metrics
+    enabled: true
+    
+    # ServiceMonitor configuration
+    serviceMonitor:
+      # Enable ServiceMonitor creation
+      enabled: true
+      # Scraping interval
+      interval: 30s
+      # Scraping path
+      path: /metrics
+      # Additional labels for ServiceMonitor
+      additionalLabels: {}
+      # Namespace selector (empty means current namespace)
+      namespaceSelector: {}
+      
+    # PrometheusRule configuration for alerts
+    prometheusRule:
+      # Enable PrometheusRule creation
+      enabled: true
+      # Additional labels for PrometheusRule
+      additionalLabels: {}
+      # Alert rules
+      rules:
+        - alert: ArgoWorkflowControllerDown
+          expr: up{job="argo-workflows-controller-metrics"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Argo Workflow Controller is down"
+            description: "Argo Workflow Controller has been down for more than 5 minutes"
+            
+        - alert: ArgoWorkflowsHighFailureRate
+          expr: (rate(argo_workflow_failed_total[5m]) / rate(argo_workflow_created_total[5m])) * 100 > 50
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High workflow failure rate"
+            description: "Workflow failure rate is above 50% for the last 10 minutes"
+            
+        - alert: ArgoEventsControllerDown
+          expr: up{job="argo-workflows-events-metrics"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Argo Events Controller is down"
+            description: "Argo Events Controller has been down for more than 5 minutes"
+            
+        - alert: ArgoEventsEventBusDown
+          expr: up{job=~".*eventbus.*"} == 0
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo Events EventBus is down"
+            description: "One or more EventBus instances are down"
+
+  # Grafana dashboard configuration
+  grafana:
+    # Enable Grafana dashboard creation
+    enabled: true
+    # Dashboard configuration
+    dashboard:
+      # Additional labels for dashboard ConfigMap
+      additionalLabels:
+        grafana_dashboard: "1"
+      # Grafana folder
+      folder: "Argo Workflows"
+      

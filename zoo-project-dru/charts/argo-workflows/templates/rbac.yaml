@@ -1,0 +1,101 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-workflow-role
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: [ "pods", "pods/exec", "pods/log"]
+  verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: [ "configmaps"]
+  verbs: [ "get", "watch", "list"]
+- apiGroups: [""]
+  resources: [ "persistentvolumeclaims", "persistentvolumeclaims/finalizers"]
+  verbs: [ "create", "update", "delete", "get", "list", "watch"]
+- apiGroups: [ "argoproj.io"]
+  resources: [ "workflows", "workflows/finalizers", "workflowtasksets", "workflowtasksets/finalizers", "workflowartifactgctasks", "workflowtaskresults"]
+  verbs: [ "get", "list", "watch", "update", "patch", "delete", "create"]
+- apiGroups: [ "argoproj.io"]
+  resources: [ "workflowtemplates", "workflowtemplates/finalizers"]
+  verbs: [ "get", "list", "watch"]
+- apiGroups: [""]
+  resources: [ "serviceaccounts"]
+  verbs: [ "get", "list"]
+- apiGroups: ["argoproj.io"]
+  resources: [ "cronworkflows", "cronworkflows/finalizers"]
+  verbs: [ "get", "list", "watch", "update", "patch", "delete", "create"]
+- apiGroups: [""]
+  resources: [ "events"]
+  verbs: [ "create", "patch"]
+- apiGroups: [ "policy"]
+  resources: [ "poddisruptionbudgets"]
+  verbs: [ "create", "get", "delete"]
+# Additional permissions for post-deployment operations
+- apiGroups: [ "apps" ]
+  resources: [ "deployments" ]
+  verbs: [ "get", "list", "watch" ]
+- apiGroups: [ "" ]
+  resources: [ "pods" ]
+  verbs: [ "get", "list", "watch" ]
+# Leader election permissions for workflow-controller
+- apiGroups: [ "coordination.k8s.io" ]
+  resources: [ "leases" ]
+  verbs: [ "get", "list", "watch", "create", "update", "patch", "delete" ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-workflow-role-binding
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "argo-workflows.fullname" . }}-workflow-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "argo-workflows.serviceAccountName" . }}
+  namespace: {{ include "argo-workflows.namespace" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-server-role
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.server.labels" . | nindent 4 }}
+rules:
+- apiGroups: [ "" ]
+  resources: [ "configmaps", "events" ]
+  verbs: [ "get", "watch", "list" ]
+- apiGroups: [ "" ]
+  resources: [ "pods", "pods/exec", "pods/log" ]
+  verbs: [ "get", "list", "watch", "delete" ]
+- apiGroups: [ "" ]
+  resources: [ "secrets" ]
+  verbs: [ "get" ]
+- apiGroups: [ "argoproj.io" ]
+  resources: [ "workflows", "workflowtemplates", "cronworkflows" ]
+  verbs: [ "create", "get", "list", "watch", "update", "patch", "delete" ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-server-role-binding
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.server.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "argo-workflows.fullname" . }}-server-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "argo-workflows.serviceAccountName" . }}-server
+  namespace: {{ include "argo-workflows.namespace" . }}
+{{- end }}

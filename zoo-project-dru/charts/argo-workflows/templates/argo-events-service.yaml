@@ -1,0 +1,23 @@
+{{- if .Values.argo.events.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: argo-events-controller-manager
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.events.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 7777
+    targetPort: 7777
+    protocol: TCP
+  - name: health
+    port: 8081
+    targetPort: 8081
+    protocol: TCP
+  selector:
+    app: argo-events-controller-manager
+    {{- include "argo-workflows.selectorLabels" . | nindent 4 }}
+{{- end }}

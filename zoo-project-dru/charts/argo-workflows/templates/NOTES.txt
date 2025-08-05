@@ -1,0 +1,16 @@
+🚀 Argo Workflows deployed successfully!
+==========================================
+
+📍 Access the Argo UI:
+   kubectl port-forward -n {{ include "argo-workflows.namespace" . }} svc/argo-server 2746:2746
+   Open: http://localhost:2746
+
+{{ include "argo-workflows.apiInstructions" . }}
+
+{{- if .Values.minio.enabled }}
+MinIO Object Storage:
+   kubectl port-forward -n {{ include "argo-workflows.namespace" . }} svc/minio 9001:9001
+   Open: http://localhost:9001
+   Username: {{ .Values.minio.auth.rootUser | default "minio-admin" }}
+   Password: {{ .Values.minio.auth.rootPassword | default "minio-admin" }}
+{{- end }}

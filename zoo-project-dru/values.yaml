@@ -139,16 +139,23 @@ workflow:
     #name: "my-dedicated-namespace"
     #serviceAccount: "my-dedicated-service-account"
   argo:
-    enabled: true
+    enabled: false
     storageClass: standard
     defaultVolumeSize: "12Gi"
     defaultMaxRam: "2Gi"
-    wfServer: "http://argo-server.ns1.svc.cluster.local:2746"
-    wfToken: "aaaabbbbccccdddd"
+    wfServer: "http://argo-server.zoo.svc.cluster.local:2746"
+    wfToken: "" # Token sera récupéré automatiquement lors du déploiement
     wfSynchronizationCm: "semaphore-argo-cwl-runner-stage-in-out"
     CwlRunnerTemplare: "argo-cwl-runner-stage-in-out"
     CwlRunnerEndpoint: "calrissian-runner"
-    
+    # Options pour la gestion automatique des tokens
+    autoTokenManagement: true  # Active la récupération automatique du token
+    restartOnTokenUpdate: false  # Redémarre les pods après mise à jour du token
+    prometheus:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+
 postgresql:
   defineEnvironmentVariables: false
   enabled: true
@@ -262,6 +269,8 @@ webui:
   enforce: false
   oidc:
     issuer: https://auth.geolabs.fr/realms/zooproject
+    clientId: zoo-client-id
+    clientSecret: zoo-client-secret
     remoteUserClaim: email
     providerTokenEndpointAuth: client_secret_basic
     authVerifyJwksUri: https://auth.geolabs.fr/realms/zooproject/protocol/openid-connect/certs
@@ -293,6 +302,79 @@ files:
 customConfig:
   # file main.cfg
   main: {}
+
+# Argo Workflows configuration
+argo-workflows:
+  enabled: false
+  global:
+    namespace: zoo
+  cwlRunner:
+    enabled: true
+    defaultResources:
+      maxRam: "8G"
+      maxCores: "8"
+  minio:
+    enabled: false
+    external:
+      enabled: true
+      endpoint: s3-service.zoo.svc.cluster.local:9000
+      secure: false
+      accessKeySecret:
+        name: s3-service
+        key: root-user
+      secretKeySecret:
+        name: s3-service
+        key: root-password
+  stageInOut:
+    enabled: true
+
+# Monitoring configuration
+monitoring:
+  enabled: false
+  kube-prometheus-stack:
+    prometheusOperator:
+      podSecurityPolicy:
+        enabled: false
+    crds:
+      enabled: true
+    prometheus:
+      prometheusSpec:
+        serviceMonitorSelectorNilUsesHelmValues: false
+        serviceMonitorSelector: {}
+        ruleSelector: {}
+    grafana:
+      defaultDashboardsEnabled: true
+      adminPassword: admin
+    prometheus-node-exporter:
+      enabled: false
+      # Configuration pour Docker Desktop quand activé
+      hostRootFsMount:
+        enabled: true
+        mountPropagation: ""  # Vide = None, compatible Docker Desktop
+      hostProcFsMount:
+        mountPropagation: ""
+      hostSysFsMount:
+        mountPropagation: ""
+    # Désactive les PodSecurityPolicy partout
+    podSecurityPolicy:
+      enabled: false
+    kube-state-metrics:
+      podSecurityPolicy:
+        enabled: false
+    alertmanager:
+      podSecurityPolicy:
+        enabled: false
+
+# Configuration de sécurité moderne
+security:
+  # Pod Security Standards (remplace les PodSecurityPolicy dépréciées)
+  podSecurityStandards:
+    enabled: false  # Activé si votre cluster Kubernetes >= 1.23
+    enforce: "baseline"  # privileged, baseline, ou restricted
+    audit: "restricted"   # Niveau d'audit (recommandé: restricted)  
+    warn: "restricted"    # Niveau d'avertissement
+    version: "latest"     # Version des standards PSS
+
 #
 # Example - passing through custom config that can be accessed directly in a
 # cookiecutter template that is provided as a deployment customisation.

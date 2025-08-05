@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "argo-workflows.fullname" . }}-post-deployment
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      name: post-deployment
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "argo-workflows.serviceAccountName" . }}
+      containers:
+      - name: wait-for-stabilization
+        image: bitnami/kubectl:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "Waiting for Argo Workflows server to be ready..."
+          
+          # Wait for argo-server deployment to be ready
+          kubectl wait --for=condition=available --timeout=300s deployment/argo-server -n {{ include "argo-workflows.namespace" . }}
+          
+          # Wait for argo-server pods to be running
+          kubectl wait --for=condition=ready --timeout=300s pod -l app=argo-server,app.kubernetes.io/instance={{ .Release.Name }} -n {{ include "argo-workflows.namespace" . }}
+          
+          # Wait for workflow-controller deployment to be ready
+          kubectl wait --for=condition=available --timeout=300s deployment/workflow-controller -n {{ include "argo-workflows.namespace" . }}
+          
+          # Wait for workflow-controller pods to be running
+          kubectl wait --for=condition=ready --timeout=300s pod -l app=workflow-controller,app.kubernetes.io/instance={{ .Release.Name }} -n {{ include "argo-workflows.namespace" . }}
+          
+          {{- if .Values.minio.enabled }}
+          # Wait for MinIO to be ready
+          kubectl wait --for=condition=ready --timeout=300s pod -l app=minio,release={{ .Release.Name }} -n {{ include "argo-workflows.namespace" . }}
+          {{- end }}
+          
+          echo "All services are ready"
+          
+          # Additional wait to ensure all services are fully stabilized
+          sleep 30
+          
+          echo "Post-deployment stabilization complete - WorkflowTemplates can now be deployed"

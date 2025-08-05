@@ -1,0 +1,84 @@
+{{- if .Values.argo.events.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argo-events-controller-manager
+  namespace: {{ include "argo-workflows.namespace" . }}
+  labels:
+    {{- include "argo-workflows.events.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.argo.events.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: argo-events-controller-manager
+      {{- include "argo-workflows.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: argo-events-controller-manager
+        {{- include "argo-workflows.events.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: argo-events-sa
+      containers:
+      - name: controller-manager
+        image: "quay.io/argoproj/argo-events:v{{ .Values.argo.events.version }}"
+        imagePullPolicy: {{ .Values.argo.events.imagePullPolicy | default "Always" }}
+        args:
+        - controller
+        - --namespaced
+        env:
+        - name: ARGO_EVENTS_IMAGE
+          value: "quay.io/argoproj/argo-events:v{{ .Values.argo.events.version }}"
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        {{- with .Values.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        ports:
+        - name: metrics
+          containerPort: 7777
+          protocol: TCP
+        - name: health
+          containerPort: 8081
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        volumeMounts:
+        - name: controller-config-volume
+          mountPath: /etc/argo-events
+        resources:
+          {{- toYaml .Values.argo.events.resources | nindent 10 }}
+      volumes:
+      - name: controller-config-volume
+        configMap:
+          name: argo-events-controller-config
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
